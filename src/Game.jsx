@@ -102,7 +102,7 @@ const DATA = {
 export default function Game({ goHome }) {
 
   /* ================= STATE ================= */
-  const [time, setTime] = useState(1);
+  const [time, setTime] = useState(60);
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [correctList, setCorrectList] = useState([]);
