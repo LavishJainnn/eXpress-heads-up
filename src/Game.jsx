@@ -1,11 +1,11 @@
-import { useState, useEffect,useRef} from "react";
-
+import { useState, useEffect, useRef, useCallback } from "react";
+import useGyroscope from "./useGyroscope";
 
 const DATA = {
   easy: [
     "Mumbai Indians","Chennai Super Kings","Royal Challengers Bengaluru","Kolkata Knight Riders",
     "Rajasthan Royals","Sunrisers Hyderabad","Delhi Capitals","Punjab Kings","Gujarat Titans",
-    "Lucknow Super Giants","Ambani’s","Shah Rukh Khan","Preity Zinta","Tata IPL",
+    "Lucknow Super Giants","Ambani's","Shah Rukh Khan","Preity Zinta","Tata IPL",
     "Virat Kohli","MS Dhoni","Rohit Sharma","Hardik Pandya","Jasprit Bumrah","KL Rahul",
     "Rishabh Pant","Shubman Gill","Shreyas Iyer","Suryakumar Yadav","Ravindra Jadeja",
     "Yuzvendra Chahal","Mohammed Shami","Mohammed Siraj","Ishan Kishan","Sanju Samson",
@@ -51,7 +51,7 @@ const DATA = {
     "Long off","Fine leg","Mid off","Mid on","Handling the ball","Reflex Catch",
     "Slower Ball","Knuckle Ball","Inswinging Yorker","Outswinger","Good Length",
     "Short Ball","Googly","Carrom Ball","Strategic Timeout","Diamond Duck",
-    "Kavya Maran","Birla’s","Match referee","Most fours","Most sixes",
+    "Kavya Maran","Birla's","Match referee","Most fours","Most sixes",
     "Super striker","Halla bol","Aava de","Roar macha","Korbo lorbo jeetbo re",
     "Orange army","Cramp for room","Retired out","Obstructing the field",
     "No man's land","Road to playoffs","Wriddhiman Saha","Faf du Plessis",
@@ -109,6 +109,11 @@ export default function Game({ goHome }) {
   const [skipList, setSkipList] = useState([]); 
   const [easyAttempts, setEasyAttempts] = useState(0);
   const [current, setCurrent] = useState({ w: "Loading...", t: "easy" });
+  const [usedWords, setUsedWords] = useState([]);
+
+  // Gyroscope feedback state
+  const [gyroFeedback, setGyroFeedback] = useState(null); // "correct" | "wrong" | null
+  const feedbackTimeoutRef = useRef(null);
 
   const [category, setCategory] = useState({
     easy: true,
@@ -126,74 +131,130 @@ export default function Game({ goHome }) {
   }, [time]);
 
   /* ================= WORD ================= */
+  const getWord = () => {
+    let pool = [];
+    if (category.easy) {
+      pool = [...pool, ...DATA.easy.map(w => ({ w, t: "easy" }))];
+    }
+    if (category.medium) {
+      pool = [...pool, ...DATA.medium.map(w => ({ w, t: "medium" }))];
+    }
+    if (category.hard) {
+      pool = [...pool, ...DATA.hard.map(w => ({ w, t: "hard" }))];
+    }
+    const filtered = pool.filter(item => !usedWords.includes(item.w));
+    if (filtered.length === 0) {
+      return { w: "No cards left", t: "easy" };
+    }
+    return filtered[Math.floor(Math.random() * filtered.length)];
+  };
 
-// 🔁 Track used words (no repeat)
-const [usedWords, setUsedWords] = useState([]);
+  const nextCard = () => {
+    const word = getWord();
+    setCurrent(word);
+  };
 
-const getWord = () => {
-  let pool = [];
+  useEffect(() => {
+    nextCard();
+  }, []);
 
-  if (category.easy) {
-    pool = [...pool, ...DATA.easy.map(w => ({ w, t: "easy" }))];
-  }
-  if (category.medium) {
-    pool = [...pool, ...DATA.medium.map(w => ({ w, t: "medium" }))];
-  }
-  if (category.hard) {
-    pool = [...pool, ...DATA.hard.map(w => ({ w, t: "hard" }))];
-  }
+  /* ================= GAME HANDLER ================= */
+  const handle = useCallback((type) => {
+    if (!current || !current.w || current.w === "No cards left") return;
 
-  // remove used words
-  const filtered = pool.filter(item => !usedWords.includes(item.w));
+    if (current.t === "easy") {
+      setEasyAttempts(e => e + 1);
+    }
 
-  if (filtered.length === 0) {
-    return { w: "No cards left", t: "easy" };
-  }
+    if (type === "correct") {
+      setCorrectList(prev => [...prev, current.w]);
+      setUsedWords(prev => [...prev, current.w]);
+      if (current.t === "easy") setScore(s => s + 1);
+      if (current.t === "medium") setScore(s => s + 2);
+      if (current.t === "hard") setScore(s => s + 3);
+    } else {
+      setSkipList(prev => [...prev, current.w]);
+    }
 
-  return filtered[Math.floor(Math.random() * filtered.length)];
-};
+    nextCard();
+  }, [current, category, usedWords]);
 
-// ➡️ Move to next card
-const nextCard = () => {
-  const word = getWord();
-  setCurrent(word);
-};
+  /* ================= GYROSCOPE HANDLERS ================= */
+  const handleGyroCorrect = useCallback(() => {
+    if (time <= 0) return;
+    
+    // Show feedback
+    setGyroFeedback("correct");
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => setGyroFeedback(null), 800);
+    
+    handle("correct");
+  }, [handle, time]);
 
-// 🚀 First card on start
-useEffect(() => {
-  nextCard();
-}, []);
+  const handleGyroSkip = useCallback(() => {
+    if (time <= 0) return;
+    
+    // Show feedback
+    setGyroFeedback("wrong");
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => setGyroFeedback(null), 800);
+    
+    handle("skip");
+  }, [handle, time]);
 
-  /* ================= GAME ================= */
-const handle = (type) => {
-  if (!current || !current.w) return;
-
-  // count easy attempts
-  if (current.t === "easy") {
-    setEasyAttempts(e => e + 1);
-  }
-
-  if (type === "correct") {
-    setCorrectList(prev => [...prev, current.w]);
-
-    setUsedWords(prev => [...prev, current.w]); // ✅ prevents repeat
-
-    if (current.t === "easy") setScore(s => s + 1);
-    if (current.t === "medium") setScore(s => s + 2);
-    if (current.t === "hard") setScore(s => s + 3);
-  } else {
-    setSkipList(prev => [...prev, current.w]);
-  }
-
-  nextCard();
-};
+  /* ================= GYROSCOPE HOOK ================= */
+  const { requestPermission } = useGyroscope({
+    onCorrect: handleGyroCorrect,
+    onSkip: handleGyroSkip,
+    enabled: time > 0
+  });
 
   /* ================= AUTO LOCK ================= */
-useEffect(() => {
-  if (easyAttempts >= 5 && category.easy) {
-    setCategory(prev => ({ ...prev, easy: false }));
-  }
-}, [easyAttempts]);
+  useEffect(() => {
+    if (easyAttempts >= 5 && category.easy) {
+      setCategory(prev => ({ ...prev, easy: false }));
+    }
+  }, [easyAttempts]);
+
+  /* ================= LOCK SCREEN TO LANDSCAPE ================= */
+  useEffect(() => {
+    // Try to lock to landscape on supported browsers
+    const lockScreen = async () => {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock("landscape");
+        }
+      } catch (e) {
+        // Silently fail - not all browsers support this
+        console.log("Screen orientation lock not supported");
+      }
+    };
+    lockScreen();
+
+    // Keep screen awake using Wake Lock API
+    let wakeLock = null;
+    const requestWakeLock = async () => {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen");
+        }
+      } catch (e) {
+        console.log("Wake lock not supported");
+      }
+    };
+    requestWakeLock();
+
+    return () => {
+      if (wakeLock) {
+        wakeLock.release();
+      }
+      try {
+        if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock();
+        }
+      } catch (e) {}
+    };
+  }, []);
 
   /* ================= SWIPE ================= */
   const handleTouchStart = (e) => {
@@ -201,16 +262,14 @@ useEffect(() => {
   };
 
   const handleTouchEnd = (e) => {
-  const endX = e.changedTouches[0].clientX; // ✅ correct axis
-
-  if (startX.current - endX > 80) {
-    handle("skip");     // 👉 swipe LEFT
-  }
-
-  if (endX - startX.current > 80) {
-    handle("correct");  // 👉 swipe RIGHT
-  }
-};
+    const endX = e.changedTouches[0].clientX;
+    if (startX.current - endX > 80) {
+      handle("skip");
+    }
+    if (endX - startX.current > 80) {
+      handle("correct");
+    }
+  };
 
   /* ================= COLORS ================= */
   const getColor = () => {
@@ -220,75 +279,171 @@ useEffect(() => {
     return "white";
   };
 
+  /* ================= FEEDBACK OVERLAY ================= */
+  const renderFeedbackOverlay = () => {
+    if (!gyroFeedback) return null;
+
+    const isCorrect = gyroFeedback === "correct";
+
+    return (
+      <div style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        pointerEvents: "none",
+        background: isCorrect
+          ? "rgba(0, 255, 136, 0.25)"
+          : "rgba(255, 0, 51, 0.25)",
+        animation: "feedbackFade 0.8s ease-out forwards"
+      }}>
+        <div style={{
+          fontSize: "72px",
+          fontWeight: "900",
+          color: isCorrect ? "#00ff88" : "#ff0033",
+          textShadow: isCorrect
+            ? "0 0 40px #00ff88, 0 0 80px #00ff88"
+            : "0 0 40px #ff0033, 0 0 80px #ff0033",
+          animation: "feedbackPop 0.5s ease-out"
+        }}>
+          {isCorrect ? "✓ CORRECT" : "✗ WRONG"}
+        </div>
+      </div>
+    );
+  };
+
   /* ================= GAME OVER ================= */
   if (time <= 0) {
-  return (
-    <div style={styles.endContainer}>
+    return (
+      <div style={styles.endContainer}>
+        <h1 style={styles.endTitle}>Game Over</h1>
+        <h2 style={styles.score}>🏆 {score}</h2>
 
-      <h1 style={styles.endTitle}>Game Over</h1>
-
-      <h2 style={styles.score}>🏆 {score}</h2>
-
-      {/* CORRECT */}
-      <div style={styles.listBox}>
-        <h3 style={{ color: "#00ff88" }}>✔ Correct: </h3>
-        <div style={styles.list}>
-          {correctList.map((item, i) => (
-            <span key={i} style={styles.correctItem}>{item}</span>
-          ))}
+        {/* CORRECT */}
+        <div style={styles.listBox}>
+          <h3 style={{ color: "#00ff88" }}>✔ Correct: </h3>
+          <div style={styles.list}>
+            {correctList.map((item, i) => (
+              <span key={i} style={styles.correctItem}>{item}</span>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* SKIPPED */}
-      <div style={styles.listBox}>
-        <h3 style={{ color: "#ff4444" }}>✖ Skipped: </h3>
-        <div style={styles.list}>
-          {skipList.map((item, i) => (
-            <span key={i} style={styles.skipItem}>{item}</span>
-          ))}
+        {/* SKIPPED */}
+        <div style={styles.listBox}>
+          <h3 style={{ color: "#ff4444" }}>✖ Skipped: </h3>
+          <div style={styles.list}>
+            {skipList.map((item, i) => (
+              <span key={i} style={styles.skipItem}>{item}</span>
+            ))}
+          </div>
         </div>
+
+        {/* BUTTON */}
+        <button onClick={goHome} style={styles.playAgain}>
+          Play Again
+        </button>
       </div>
+    );
+  }
 
-      {/* BUTTON */}
-      <button onClick={goHome} style={styles.playAgain}>
-        Play Again
-      </button>
+  if (!current || !current.w) {
+    return (
+      <div style={{ color: "white", textAlign: "center", marginTop: "50%" }}>
+        Loading...
+      </div>
+    );
+  }
 
-    </div>
-  );
-}
-if (!current || !current.w) {
-  return (
-    <div style={{ color: "white", textAlign: "center", marginTop: "50%" }}>
-      Loading...
-    </div>
-  );
-}
   /* ================= UI ================= */
   return (
     <div style={styles.container}>
 
-      {/* TOP */}
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes feedbackFade {
+          0% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        @keyframes feedbackPop {
+          0% { transform: scale(0.5); opacity: 0; }
+          50% { transform: scale(1.2); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 20px currentColor; }
+          50% { box-shadow: 0 0 40px currentColor, 0 0 60px currentColor; }
+        }
+        @keyframes arrowBounceUp {
+          0%, 100% { transform: translateY(0) rotate(180deg); }
+          50% { transform: translateY(-12px) rotate(180deg); }
+        }
+        @keyframes arrowBounceDown {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(12px); }
+        }
+      `}</style>
+
+      {/* GYROSCOPE FEEDBACK OVERLAY */}
+      {renderFeedbackOverlay()}
+
+      {/* TOP BAR */}
       <div style={styles.top}>
-        <div>⏱ {time}</div>
-        <div>🏆 {score}</div>
+        <div style={styles.topItem}>⏱ {time}</div>
+        <div style={styles.topItem}>🏆 {score}</div>
       </div>
-      {/* CARD */}
-     <div
-  onTouchStart={handleTouchStart}
-  onTouchEnd={handleTouchEnd}
-  style={{
-    ...styles.card,
-    border: `3px solid ${getColor()}`,
-    boxShadow: `0 0 20px ${getColor()}`
-  }}
->
-  {current?.w || "Loading..."}
-</div>
+
+      {/* GYROSCOPE HINTS - shown on sides in landscape */}
+      <div style={styles.gyroHintContainer}>
+        {/* LEFT - Tilt UP = Wrong */}
+        <div style={styles.gyroHintLeft}>
+          <div style={{
+            fontSize: "28px",
+            animation: "arrowBounceUp 1.2s ease-in-out infinite",
+            transform: "rotate(180deg)"
+          }}>
+            ▼
+          </div>
+          <span style={{ fontSize: "11px", opacity: 0.7, marginTop: "4px" }}>TILT UP</span>
+          <span style={{ fontSize: "10px", color: "#ff0033", fontWeight: "bold" }}>WRONG</span>
+        </div>
+
+        {/* CARD */}
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          style={{
+            ...styles.card,
+            border: `3px solid ${getColor()}`,
+            boxShadow: `0 0 20px ${getColor()}`,
+            color: getColor(),
+            animation: "pulseGlow 2s ease-in-out infinite"
+          }}
+        >
+          {current?.w || "Loading..."}
+        </div>
+
+        {/* RIGHT - Tilt DOWN = Correct */}
+        <div style={styles.gyroHintRight}>
+          <div style={{
+            fontSize: "28px",
+            animation: "arrowBounceDown 1.2s ease-in-out infinite"
+          }}>
+            ▼
+          </div>
+          <span style={{ fontSize: "11px", opacity: 0.7, marginTop: "4px" }}>TILT DOWN</span>
+          <span style={{ fontSize: "10px", color: "#00ff88", fontWeight: "bold" }}>CORRECT</span>
+        </div>
+      </div>
 
       {/* HINT */}
       <p style={styles.hint}>
-        Swipe right = Correct | Swipe left = Skip
+        📱 Hold phone on forehead in landscape • Tilt ↓ = Correct • Tilt ↑ = Wrong
       </p>
 
       {/* CATEGORIES */}
@@ -328,11 +483,11 @@ if (!current || !current.w) {
       {/* CONTROLS */}
       <div style={styles.controls}>
         <button onClick={() => handle("skip")} style={styles.skip}>
-          Skip
+          ✗ Wrong
         </button>
 
         <button onClick={() => handle("correct")} style={styles.correct}>
-          Correct
+          ✓ Correct
         </button>
       </div>
 
@@ -354,7 +509,8 @@ const styles = {
     position: "relative",
     flexDirection: "column",
     justifyContent: "space-between",
-    padding: "16px"
+    padding: "12px 16px",
+    overflow: "hidden"
   },
 
   top: {
@@ -364,62 +520,108 @@ const styles = {
     fontWeight: "bold"
   },
 
+  topItem: {
+    background: "rgba(0,0,0,0.5)",
+    padding: "6px 14px",
+    borderRadius: "10px",
+    backdropFilter: "blur(10px)"
+  },
+
+  gyroHintContainer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "16px",
+    flex: 1
+  },
+
+  gyroHintLeft: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    color: "#ff0033",
+    minWidth: "60px"
+  },
+
+  gyroHintRight: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    color: "#00ff88",
+    minWidth: "60px"
+  },
+
   card: {
-  flex: 1,
-  maxHeight: "20vh",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "36px",
-  textAlign: "center",
-  borderRadius: "20px",
-  padding: "20px",
-  background: "rgba(0,0,0,0.5)",
-  position: "relative",
-  zIndex:1
-},
+    flex: 1,
+    maxWidth: "60%",
+    maxHeight: "25vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "clamp(24px, 5vw, 40px)",
+    textAlign: "center",
+    borderRadius: "20px",
+    padding: "20px",
+    background: "rgba(0,0,0,0.6)",
+    position: "relative",
+    zIndex: 1,
+    backdropFilter: "blur(10px)",
+    fontWeight: "bold",
+    letterSpacing: "1px"
+  },
 
   hint: {
     textAlign: "center",
-    opacity: 0.6
+    opacity: 0.6,
+    fontSize: "11px",
+    margin: "4px 0"
   },
 
   categories: {
     display: "flex",
     justifyContent: "center",
-    gap: "24px"
+    gap: "16px"
   },
 
   catBtn: {
-    padding: "12px 24px",
+    padding: "8px 18px",
     borderRadius: "10px",
     color: "white",
-    border: "2px solid"
+    border: "2px solid",
+    fontSize: "12px",
+    fontWeight: "bold",
+    textTransform: "uppercase"
   },
 
   controls: {
-  display: "flex",
-  gap: "10px",
-  position: "relative",  
-  zIndex: 20             
-},
+    display: "flex",
+    gap: "10px",
+    position: "relative",
+    zIndex: 20
+  },
 
   skip: {
     flex: 1,
-    padding: "16px",
-    background: "#ff0033",
+    padding: "14px",
+    background: "linear-gradient(135deg, #ff0033, #cc0029)",
     color: "white",
     borderRadius: "12px",
-    border: "none"
+    border: "none",
+    fontSize: "16px",
+    fontWeight: "bold",
+    boxShadow: "0 4px 15px rgba(255,0,51,0.4)"
   },
 
   correct: {
     flex: 1,
-    padding: "16px",
-    background: "#00ff88",
+    padding: "14px",
+    background: "linear-gradient(135deg, #00ff88, #00cc6a)",
     color: "black",
     borderRadius: "12px",
-    border: "none"
+    border: "none",
+    fontSize: "16px",
+    fontWeight: "bold",
+    boxShadow: "0 4px 15px rgba(0,255,136,0.4)"
   },
 
   center: {
@@ -433,62 +635,62 @@ const styles = {
   },
   
   endContainer: {
-  backgroundImage: `url(/trophy.png)`,
-  backgroundSize: "cover",
-  backgroundPosition: "center",
-  opacity: "0.5",
-  color: "#00ffff",
-  height: "100vh",
-  padding: "20px",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  overflowY: "auto"
-},
+    backgroundImage: `url(/trophy.png)`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    opacity: "0.5",
+    color: "#00ffff",
+    height: "100vh",
+    padding: "20px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    overflowY: "auto"
+  },
 
-endTitle: {
-  fontSize: "32px",
-  marginBottom: "10px"
-},
+  endTitle: {
+    fontSize: "32px",
+    marginBottom: "10px"
+  },
 
-score: {
-  fontSize: "28px",
-  marginBottom: "20px"
-},
+  score: {
+    fontSize: "28px",
+    marginBottom: "20px"
+  },
 
-listBox: {
-  width: "100%"
-},
+  listBox: {
+    width: "100%"
+  },
 
-list: {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "8px",
-  marginTop: "10px"
-},
+  list: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginTop: "10px"
+  },
 
-correctItem: {
-  background: "#00ff8833",
-  padding: "6px 10px",
-  borderRadius: "8px",
-  fontSize: "12px"
-},
+  correctItem: {
+    background: "#00ff8833",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    fontSize: "12px"
+  },
 
-skipItem: {
-  background: "#ff444433",
-  padding: "6px 10px",
-  borderRadius: "8px",
-  fontSize: "12px"
-},
+  skipItem: {
+    background: "#ff444433",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    fontSize: "12px"
+  },
 
-playAgain: {
-  marginTop: "20px",
-  padding: "12px 24px",
-  fontSize: "16px",
-  borderRadius: "12px",
-  background: "#00ff88",
-  color: "black",
-  border: "none",
-  width: "auto"
-}
+  playAgain: {
+    marginTop: "20px",
+    padding: "12px 24px",
+    fontSize: "16px",
+    borderRadius: "12px",
+    background: "#00ff88",
+    color: "black",
+    border: "none",
+    width: "auto"
+  }
 };
