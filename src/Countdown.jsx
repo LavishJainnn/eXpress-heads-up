@@ -38,6 +38,6 @@ const styles = {
   number: {
     fontSize: "80px",
     fontWeight: "bold",
-    textShadow: "0 0 20px #00ffff, 0 0 40px #00ffff"
+    textShadow: "0 0 4px #00ffff, 0 0 4px #00ffff"
   }
 };

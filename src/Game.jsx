@@ -115,7 +115,7 @@ export default function Game({ goHome }) {
     hard: true
   });
 
-  const startY = useRef(0);
+  const startX = useRef(0);
 
   /* ================= TIMER ================= */
   useEffect(() => {
@@ -196,14 +196,20 @@ useEffect(() => {
 
   /* ================= SWIPE ================= */
   const handleTouchStart = (e) => {
-    startY.current = e.touches[0].clientY;
+    startX.current = e.touches[0].clientX;
   };
 
   const handleTouchEnd = (e) => {
-    const endY = e.changedTouches[0].clientY;
-    if (startY.current - endY > 50) handle("skip");
-    if (endY - startY.current > 50) handle("correct");
-  };
+  const endX = e.changedTouches[0].clientX; // ✅ correct axis
+
+  if (startX.current - endX > 80) {
+    handle("skip");     // 👉 swipe LEFT
+  }
+
+  if (endX - startX.current > 80) {
+    handle("correct");  // 👉 swipe RIGHT
+  }
+};
 
   /* ================= COLORS ================= */
   const getColor = () => {
@@ -281,7 +287,7 @@ if (!current || !current.w) {
 
       {/* HINT */}
       <p style={styles.hint}>
-        Swipe down = Correct | Swipe up = Skip
+        Swipe right = Correct | Swipe left = Skip
       </p>
 
       {/* CATEGORIES */}
@@ -337,7 +343,7 @@ if (!current || !current.w) {
 
 const styles = {
   container: {
-    background: "linear-gradient(135deg, #0a0e27, #1a0033)",
+    background: "#19388A",
     color: "#00ffff",
     height: "100vh",
     display: "flex",
@@ -356,8 +362,7 @@ const styles = {
 
   card: {
   flex: 1,
-  maxHeight: "50vh",   
-  marginBottom: "20px",
+  maxHeight: "20vh",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -378,11 +383,11 @@ const styles = {
   categories: {
     display: "flex",
     justifyContent: "center",
-    gap: "8px"
+    gap: "24px"
   },
 
   catBtn: {
-    padding: "8px 12px",
+    padding: "12px 24px",
     borderRadius: "10px",
     color: "white",
     border: "2px solid"
