@@ -48,7 +48,9 @@ export default function Home({ startGame }) {
 const styles = {
   container: {
     height: "100vh",
-    background: "linear-gradient(135deg, #000000, #0a0e27, #1a0033)",
+    backgroundImage: `url(/stadium.jpg)`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
     color: "#00ffff",
     display: "flex",
     flexDirection: "column",
