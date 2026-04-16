@@ -1,5 +1,5 @@
 import { useState, useEffect,useRef} from "react";
-import trophy from "./../public/trophy.png"
+
 
 const DATA = {
   easy: [
@@ -344,8 +344,11 @@ if (!current || !current.w) {
 
 const styles = {
   container: {
-    background: "#19388A",
-    color: "#00ffff",
+    backgroundImage: `url(/background.png)`,
+    opacity: 0.7,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    color: "#b9ff09",
     height: "100vh",
     display: "flex",
     position: "relative",
