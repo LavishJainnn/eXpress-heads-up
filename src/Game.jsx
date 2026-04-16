@@ -1,4 +1,5 @@
 import { useState, useEffect,useRef} from "react";
+import trophy from "./../public/trophy.png"
 
 const DATA = {
   easy: [
@@ -101,7 +102,7 @@ const DATA = {
 export default function Game({ goHome }) {
 
   /* ================= STATE ================= */
-  const [time, setTime] = useState(60);
+  const [time, setTime] = useState(1);
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [correctList, setCorrectList] = useState([]);
@@ -230,7 +231,7 @@ useEffect(() => {
 
       {/* CORRECT */}
       <div style={styles.listBox}>
-        <h3 style={{ color: "#00ff88" }}>✔ Correct</h3>
+        <h3 style={{ color: "#00ff88" }}>✔ Correct: </h3>
         <div style={styles.list}>
           {correctList.map((item, i) => (
             <span key={i} style={styles.correctItem}>{item}</span>
@@ -240,7 +241,7 @@ useEffect(() => {
 
       {/* SKIPPED */}
       <div style={styles.listBox}>
-        <h3 style={{ color: "#ff4444" }}>✖ Skipped</h3>
+        <h3 style={{ color: "#ff4444" }}>✖ Skipped: </h3>
         <div style={styles.list}>
           {skipList.map((item, i) => (
             <span key={i} style={styles.skipItem}>{item}</span>
@@ -429,7 +430,10 @@ const styles = {
   },
   
   endContainer: {
-  background: "linear-gradient(135deg, #0a0e27, #1a0033)",
+  backgroundImage: `url(/trophy.png)`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  opacity: "0.5",
   color: "#00ffff",
   height: "100vh",
   padding: "20px",
@@ -450,8 +454,7 @@ score: {
 },
 
 listBox: {
-  width: "100%",
-  marginBottom: "20px"
+  width: "100%"
 },
 
 list: {
